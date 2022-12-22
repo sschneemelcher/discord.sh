@@ -1,6 +1,6 @@
 #!/bin/sh
 
-CONFIG_FILE="config.sh"
+CONFIG_FILE="./config.sh"
 
 # shellcheck source=./config.sh
 . $CONFIG_FILE
@@ -15,6 +15,7 @@ send_message() {
        -d "{\"content\": \"$message_to_send\"}" > /dev/null
 }
 
+# TODO add features to logging
 bot_log() {
   printf "[log] %s\n" "$1"
 }
@@ -79,9 +80,11 @@ while true; do
       *) # Default
       ;;
     esac
+
     if [ -n "$LOGGING" ]; then
       bot_log "$bot_message"
     fi
+
   done
 
   # Wait sometime before polling again
