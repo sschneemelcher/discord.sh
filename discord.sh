@@ -20,6 +20,14 @@ bot_log() {
   printf "[log] %s\n" "$1"
 }
 
+# difference between timestamp and now in ms
+ms_difference() {
+  from_timestamp="$1"
+  parsed_timestamp_unix=$(date -d "$(date -d "$from_timestamp" +"%Y-%m-%dT%T.%N%z")" +"%s%N")
+  current_time_unix=$(date -d "$(date +"%Y-%m-%dT%T.%N%z")" +"%s%N")
+  printf "%s" "$(((current_time_unix - parsed_timestamp_unix) / 1000000))"
+}
+
 # Retrieve the last message of the channel
 messages=$(curl -s -X GET "$ENDPOINT/channels/$GENERAL_CHANNEL_ID/messages?limit=1" \
                 -H "Authorization: Bot $TOKEN" \
@@ -70,18 +78,19 @@ while true; do
 
       "!ping"*)
         timestamp=$(printf "%s" "$message" | jq -r '.timestamp')
-        parsed_timestamp_unix=$(date -d "$(date -d "$timestamp" +"%Y-%m-%dT%T.%N%z")" +"%s%N")
-        current_time_unix=$(date -d "$(date +"%Y-%m-%dT%T.%N%z")" +"%s%N")
-        difference_ms=$(((current_time_unix - parsed_timestamp_unix) / 1000000))
+        difference_ms=$(ms_difference "$timestamp")
         bot_message="pong! [$difference_ms ms]"
         send_message "$channel_id" "$bot_message"
       ;;
 
       *) # Default
+        # We unset this here, so that we do not log something when reading
+        # our own messages from the channel
+        bot_message=""
       ;;
     esac
 
-    if [ -n "$LOGGING" ]; then
+    if [ -n "$LOGGING" ] && [ -n "$bot_message" ]; then
       bot_log "$bot_message"
     fi
 
