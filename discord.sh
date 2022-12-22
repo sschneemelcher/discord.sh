@@ -1,59 +1,86 @@
 #!/bin/sh
 
-CONFIG_FILE="config.json"
+CONFIG_FILE="config.sh"
 
-# Set the Discord API endpoint and your bot's token
-ENDPOINT=$(jq -r ".endpoint" "$CONFIG_FILE")
-TOKEN=$(jq -r ".token" "$CONFIG_FILE")
-GENERAL_CHANNEL_ID=$(jq -r ".generalChannelID" "$CONFIG_FILE")
-WAITING_INTERVAL=$(jq -r ".waitingInterval" "$CONFIG_FILE")
+# shellcheck source=./config.sh
+. $CONFIG_FILE
 
 # Send a message to a channel
 send_message() {
-  CHANNEL_ID="$1"
-  MESSAGE="$2"
-  curl -s -X POST "$ENDPOINT/channels/$CHANNEL_ID/messages" \
+  channel_id_to_send="$1"
+  message_to_send="$2"
+  curl -s -X POST "$ENDPOINT/channels/$channel_id_to_send/messages" \
        -H "Authorization: Bot $TOKEN" \
        -H "Content-Type: application/json" \
-       -d "{\"content\": \"$MESSAGE\"}" > /dev/null
+       -d "{\"content\": \"$message_to_send\"}" > /dev/null
 }
 
+bot_log() {
+  printf "[log] %s\n" "$1"
+}
+
+
+# Retrieve the last message of the channel
+messages=$(curl -s -X GET "$ENDPOINT/channels/$GENERAL_CHANNEL_ID/messages?limit=1" \
+                -H "Authorization: Bot $TOKEN" \
+                -H "Content-Type: application/json" | tr '\n' ' ')
+
+# Parse the message id
+latest_message_id=$(printf "%s" "$messages" | jq -r '.[0].id')
+
 # Main loop: check for new messages and respond
-LATEST_MESSAGE_ID_FILE="latest-message-id.txt"
-test -e "$LATEST_MESSAGE_ID_FILE" || touch "$LATEST_MESSAGE_ID_FILE"
-
 while true; do
-  # Read the ID of the latest message that has been processed
-  LATEST_MESSAGE_ID=$(cat "$LATEST_MESSAGE_ID_FILE")
-
   # Retrieve the list of unread messages
-  MESSAGES=$(curl -s -X GET "$ENDPOINT/channels/$GENERAL_CHANNEL_ID/messages?after=$LATEST_MESSAGE_ID" \
+  messages=$(curl -s -X GET "$ENDPOINT/channels/$GENERAL_CHANNEL_ID/messages?after=$latest_message_id" \
                   -H "Authorization: Bot $TOKEN" \
                   -H "Content-Type: application/json")
 
-  # Iterate over the messages and respond to each one
-  MESSAGES=$(echo "$MESSAGES" | jq -c '.[]')
+  messages=$(printf "%s" "$messages" | tr '\n' ' ')
+  n_messages=$(printf "%s" "$messages" | jq -c "length")
 
-  # If we have no new messages, wait an repoll (shell if is weird)
-  if [ "$(echo MESSAGES | wc -l)" -gt 1 ]; then
+  # If we have no new messages, wait an repoll
+  if [ "$n_messages" -lt 1 ]; then
     sleep "$WAITING_INTERVAL"
     continue
   fi
 
-  echo "$MESSAGES" | while read -r MESSAGE; do
-    # Parse the neccessary information for the reply
-    MESSAGE_ID=$(echo "$MESSAGE" | jq -r '.id')
+  # We are using a for loop here so we
+  for i in $(seq 0 $((n_messages - 1))); do
+    message=$(printf "%s" "$messages" | jq -c ".[$i]")
+    message_id=$(printf "%s" "$message" | jq -r '.id')
 
-    # Update the ID of the latest message that has been processed
-    if [ -n "$MESSAGE_ID" ]; then
-      echo "$MESSAGE_ID" > "$LATEST_MESSAGE_ID_FILE"
+    # The messages do not neccessarily in order, so we need
+    # to make sure we set LATEST_message_ID to the highest id of the batch
+    if [ "$message_id" -gt "$latest_message_id" ]; then
+      latest_message_id="$message_id"
     fi
 
-    CONTENT=$(echo "$MESSAGE" | jq -r '.content')
-    USER=$(echo "$MESSAGE" | jq -r '.author.username')
-    CHANNEL_ID=$(echo "$MESSAGE" | jq -r '.channel_id')
-    if [ "$CONTENT" = "!hello" ]; then
-      send_message "$CHANNEL_ID" "Hello, $USER!"
+    # Parse the message content
+    content=$(printf "%s" "$message" | jq -r '.content')
+    channel_id=$(printf "%s" "$message" | jq -r '.channel_id')
+
+    # Check for commands at the beginning of content
+    case $content in
+      "!hello"*)
+        user=$(printf "%s" "$message" | jq -r '.author.username')
+        bot_message="Hello, $user!"
+        send_message "$channel_id" "$bot_message"
+      ;;
+
+      "!ping"*)
+        timestamp=$(printf "%s" "$message" | jq -r '.timestamp')
+        parsed_timestamp_unix=$(date -d "$(date -d "$timestamp" +"%Y-%m-%dT%T.%N%z")" +"%s%N")
+        current_time_unix=$(date -d "$(date +"%Y-%m-%dT%T.%N%z")" +"%s%N")
+        difference_ms=$(((current_time_unix - parsed_timestamp_unix) / 1000000))
+        bot_message="pong! [$difference_ms ms]"
+        send_message "$channel_id" "$bot_message"
+      ;;
+
+      *) # Default
+      ;;
+    esac
+    if [ -n "$LOGGING" ]; then
+      bot_log "$bot_message"
     fi
   done
 
