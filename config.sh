@@ -10,4 +10,4 @@ export GENERAL_CHANNEL_ID="123456789"
 # This is the polling (in s)
 export WAITING_INTERVAL="3"
 
-export LOGGIN="1"
+export LOGGING="1"
