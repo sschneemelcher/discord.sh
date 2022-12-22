@@ -1,13 +1,19 @@
 # discord.sh
 Discord Bot using POSIX Shell
 
-The easiest way to create a Discord bot on a unix system. The only requirements
-are:
+The simplest way to create a Discord bot on a unix system. Meant to be a
+tool helping people to learn about shell scripting and automating stuff like 
+talking to APIs. The only requirements are:
 
 + a POSIX compliant shell (e.g. bash, ksh, dash, ...)
-+ [jq](https://github.com/stedolan/jq) (json parsing utility)
++ `curl`
++ [`jq`](https://github.com/stedolan/jq) (json parsing utility)
++ coreutils (namely `tr`, `seq`, `sleep`, `date`)
 
+Create a bot on [Discord](discord.com) (make sure to enable the messages
+content intent), invite it to your server with the rights to read and send
+messages and edit the `config.sh` file.
 
-Create a bot (make sure to enable the messages content intent), invite it to 
-your server with the rights to read and send messages and edit the config.json
-file.
+## Roadmap
++ more commands
++ Would be probably not a bad idea to get rid of `jq`, as this makes the whole script way less portible.

@@ -19,7 +19,6 @@ bot_log() {
   printf "[log] %s\n" "$1"
 }
 
-
 # Retrieve the last message of the channel
 messages=$(curl -s -X GET "$ENDPOINT/channels/$GENERAL_CHANNEL_ID/messages?limit=1" \
                 -H "Authorization: Bot $TOKEN" \
@@ -44,7 +43,8 @@ while true; do
     continue
   fi
 
-  # We are using a for loop here so we
+  # We are using a for loop here so we do not have to worry about running
+  # stuff in a subshell which we would if we were to use `while read`
   for i in $(seq 0 $((n_messages - 1))); do
     message=$(printf "%s" "$messages" | jq -c ".[$i]")
     message_id=$(printf "%s" "$message" | jq -r '.id')
